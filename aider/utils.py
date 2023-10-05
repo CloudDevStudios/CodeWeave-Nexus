@@ -15,12 +15,10 @@ def show_messages(messages, title=None, functions=None):
 
     for msg in messages:
         role = msg["role"].upper()
-        content = msg.get("content")
-        if content:
+        if content := msg.get("content"):
             for line in content.splitlines():
                 print(role, line)
-        content = msg.get("function_call")
-        if content:
+        if content := msg.get("function_call"):
             print(role, content)
 
     if functions:

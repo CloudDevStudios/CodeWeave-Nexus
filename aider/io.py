@@ -64,8 +64,7 @@ class AutoCompleter(Completer):
                 candidates = self.commands.get_commands()
                 candidates = [(cmd, cmd) for cmd in candidates]
             else:
-                for completion in self.commands.get_command_completions(words[0][1:], words[-1]):
-                    yield completion
+                yield from self.commands.get_command_completions(words[0][1:], words[-1])
                 return
         else:
             candidates = self.words
@@ -75,8 +74,7 @@ class AutoCompleter(Completer):
         last_word = words[-1]
         for word_match, word_insert in candidates:
             if word_match.lower().startswith(last_word.lower()):
-                rel_fnames = self.fname_to_rel_fnames.get(word_match, [])
-                if rel_fnames:
+                if rel_fnames := self.fname_to_rel_fnames.get(word_match, []):
                     for rel_fname in rel_fnames:
                         yield Completion(
                             f"`{rel_fname}`", start_position=-len(last_word), display=rel_fname
@@ -249,11 +247,7 @@ class InputOutput:
             self.console.print(inp, **style)
 
         prefix = "####"
-        if inp:
-            hist = inp.splitlines()
-        else:
-            hist = ["<blank>"]
-
+        hist = inp.splitlines() if inp else ["<blank>"]
         hist = f"  \n{prefix} ".join(hist)
 
         hist = f"""
@@ -274,7 +268,7 @@ class InputOutput:
         elif self.yes is False:
             res = "no"
         else:
-            res = prompt(question + " ", default=default)
+            res = prompt(f"{question} ", default=default)
 
         hist = f"{question.strip()} {res.strip()}"
         self.append_chat_history(hist, linebreak=True, blockquote=True)
@@ -293,7 +287,7 @@ class InputOutput:
         elif self.yes is False:
             res = "no"
         else:
-            res = prompt(question + " ", default=default)
+            res = prompt(f"{question} ", default=default)
 
         hist = f"{question.strip()} {res.strip()}"
         self.append_chat_history(hist, linebreak=True, blockquote=True)
@@ -327,7 +321,7 @@ class InputOutput:
     def append_chat_history(self, text, linebreak=False, blockquote=False):
         if blockquote:
             text = text.strip()
-            text = "> " + text
+            text = f"> {text}"
         if linebreak:
             text = text.rstrip()
             text = text + "  \n"

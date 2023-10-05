@@ -99,11 +99,7 @@ def main(argv=None, input=None, output=None, force_git_root=None):
     if argv is None:
         argv = sys.argv[1:]
 
-    if force_git_root:
-        git_root = force_git_root
-    else:
-        git_root = get_git_root()
-
+    git_root = force_git_root if force_git_root else get_git_root()
     conf_fname = Path(".aider.conf.yml")
 
     default_config_files = [conf_fname.resolve()]  # CWD

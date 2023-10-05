@@ -31,24 +31,18 @@ class Commands:
             return True
 
     def get_commands(self):
-        commands = []
-        for attr in dir(self):
-            if attr.startswith("cmd_"):
-                commands.append("/" + attr[4:])
-
-        return commands
+        return [f"/{attr[4:]}" for attr in dir(self) if attr.startswith("cmd_")]
 
     def get_command_completions(self, cmd_name, partial):
         cmd_completions_method_name = f"completions_{cmd_name}"
-        cmd_completions_method = getattr(self, cmd_completions_method_name, None)
-        if cmd_completions_method:
-            for completion in cmd_completions_method(partial):
-                yield completion
+        if cmd_completions_method := getattr(
+            self, cmd_completions_method_name, None
+        ):
+            yield from cmd_completions_method(partial)
 
     def do_run(self, cmd_name, args):
         cmd_method_name = f"cmd_{cmd_name}"
-        cmd_method = getattr(self, cmd_method_name, None)
-        if cmd_method:
+        if cmd_method := getattr(self, cmd_method_name, None):
             return cmd_method(args)
         else:
             self.io.tool_output(f"Error: Command {cmd_name} not found.")
@@ -134,7 +128,7 @@ class Commands:
             relative_fname = self.coder.get_rel_fname(fname)
             content = self.io.read_text(fname)
             # approximate
-            content = f"{relative_fname}\n```\n" + content + "```\n"
+            content = f"{relative_fname}\n```\n{content}" + "```\n"
             tokens = len(self.tokenizer.encode(content))
             res.append((tokens, f"{relative_fname}", "use /drop to drop from chat"))
 
@@ -196,8 +190,8 @@ class Commands:
         except git.exc.GitCommandError:
             has_origin = False
 
-        if has_origin:
-            if local_head == remote_head:
+        if local_head == remote_head:
+            if has_origin:
                 self.io.tool_error(
                     "The last commit has already been pushed to the origin. Undoing is not"
                     " possible."
@@ -262,8 +256,7 @@ class Commands:
             git_files = self.coder.repo.get_tracked_files()
             matched_files = [fn for fn in matched_files if str(fn) in git_files]
 
-        res = list(map(str, matched_files))
-        return res
+        return list(map(str, matched_files))
 
     def cmd_add(self, args):
         "Add matching files to the chat session using glob patterns"
@@ -279,17 +272,16 @@ class Commands:
             if not matched_files:
                 if any(char in word for char in "*?[]"):
                     self.io.tool_error(f"No files to add matching pattern: {word}")
-                else:
-                    if Path(word).exists():
-                        if Path(word).is_file():
-                            matched_files = [word]
-                        else:
-                            self.io.tool_error(f"Unable to add: {word}")
-                    elif self.io.confirm_ask(
-                        f"No files matched '{word}'. Do you want to create the file?"
-                    ):
-                        (Path(self.coder.root) / word).touch()
+                elif Path(word).exists():
+                    if Path(word).is_file():
                         matched_files = [word]
+                    else:
+                        self.io.tool_error(f"Unable to add: {word}")
+                elif self.io.confirm_ask(
+                    f"No files matched '{word}'. Do you want to create the file?"
+                ):
+                    (Path(self.coder.root) / word).touch()
+                    matched_files = [word]
 
             all_matched_files.update(matched_files)
 
@@ -323,8 +315,7 @@ class Commands:
         if not self.coder.cur_messages:
             return
 
-        reply = prompts.added_files.format(fnames=", ".join(added_fnames))
-        return reply
+        return prompts.added_files.format(fnames=", ".join(added_fnames))
 
     def completions_drop(self, partial):
         files = self.coder.get_inchat_relative_files()
@@ -356,7 +347,7 @@ class Commands:
         "Run a git command"
         combined_output = None
         try:
-            parsed_args = shlex.split("git " + args)
+            parsed_args = shlex.split(f"git {args}")
             env = dict(GIT_EDITOR="true", **subprocess.os.environ)
             result = subprocess.run(
                 parsed_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env
@@ -391,11 +382,10 @@ class Commands:
             for line in combined_output.splitlines():
                 self.io.tool_output(line, log_only=True)
 
-            msg = prompts.run_output.format(
+            return prompts.run_output.format(
                 command=args,
                 output=combined_output,
             )
-            return msg
 
     def cmd_exit(self, args):
         "Exit the application"
@@ -434,8 +424,7 @@ class Commands:
         commands = sorted(self.get_commands())
         for cmd in commands:
             cmd_method_name = f"cmd_{cmd[1:]}"
-            cmd_method = getattr(self, cmd_method_name, None)
-            if cmd_method:
+            if cmd_method := getattr(self, cmd_method_name, None):
                 description = cmd_method.__doc__
                 self.io.tool_output(f"{cmd} {description}")
             else:

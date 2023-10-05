@@ -130,13 +130,10 @@ class WholeFileCoder(Coder):
         if Path(full_path).exists():
             orig_lines = self.io.read_text(full_path).splitlines(keepends=True)
 
-            show_diff = diffs.diff_partial_update(
+            return diffs.diff_partial_update(
                 orig_lines,
                 new_lines,
                 final=final,
             ).splitlines()
-            output = show_diff
         else:
-            output = ["```"] + new_lines + ["```"]
-
-        return output
+            return ["```"] + new_lines + ["```"]

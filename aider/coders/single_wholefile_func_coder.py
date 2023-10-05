@@ -32,8 +32,6 @@ class SingleWholeFileFunctionCoder(Coder):
 
     def __init__(self, *args, **kwargs):
         raise RuntimeError("Deprecated, needs to be refactored to support get_edits/apply_edits")
-        self.gpt_prompts = SingleWholeFileFunctionPrompts()
-        super().__init__(*args, **kwargs)
 
     def update_cur_messages(self, edited):
         if edited:
@@ -51,29 +49,6 @@ class SingleWholeFileFunctionCoder(Coder):
 
         return str(args)
 
-        if not args:
-            return
-
-        explanation = args.get("explanation")
-        files = args.get("files", [])
-
-        res = ""
-        if explanation:
-            res += f"{explanation}\n\n"
-
-        for i, file_upd in enumerate(files):
-            path = file_upd.get("path")
-            if not path:
-                continue
-            content = file_upd.get("content")
-            if not content:
-                continue
-
-            this_final = (i < len(files) - 1) or final
-            res += self.live_diffs(path, content, this_final)
-
-        return res
-
     def live_diffs(self, fname, content, final):
         lines = content.splitlines(keepends=True)
 
@@ -81,11 +56,7 @@ class SingleWholeFileFunctionCoder(Coder):
         full_path = self.abs_root_path(fname)
 
         content = self.io.read_text(full_path)
-        if content is None:
-            orig_lines = []
-        else:
-            orig_lines = content.splitlines()
-
+        orig_lines = [] if content is None else content.splitlines()
         show_diff = diffs.diff_partial_update(
             orig_lines,
             lines,
@@ -106,7 +77,4 @@ class SingleWholeFileFunctionCoder(Coder):
 
         content = args["content"]
         path = self.get_inchat_relative_files()[0]
-        if self.allowed_to_edit(path, content):
-            return set([path])
-
-        return set()
+        return {path} if self.allowed_to_edit(path, content) else set()

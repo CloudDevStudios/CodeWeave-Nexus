@@ -45,167 +45,6 @@ def show_stats(dirnames):
 
     return
 
-    repeats = []
-    seen = dict()
-    rows = []
-    for row in raw_rows:
-        if not row:
-            continue
-
-        if row.model == "gpt-3.5-turbo":
-            row.model = "gpt-3.5-turbo-0613"
-        if row.edit_format == "diff-func-string":
-            row.edit_format = "diff-func"
-
-        if (
-            row.model == "gpt-3.5-turbo-0613"
-            and row.edit_format == "whole"
-            and "repeat" not in row.dir_name
-        ):
-            # remember this row, so we can update it with the repeat_avg
-            repeat_row = len(rows)
-
-        pieces = row.model.split("-")
-        row.model = "-".join(pieces[:3])
-        if pieces[3:]:
-            row.model += "\n-" + "-".join(pieces[3:])
-
-        if row.completed_tests < 133:
-            print(f"Warning: {row.dir_name} is incomplete: {row.completed_tests}")
-
-        if "repeat" in row.dir_name:
-            repeats.append(vars(row))
-            continue
-
-        kind = (row.model, row.edit_format)
-        if kind in seen:
-            dump(row.dir_name)
-            dump(seen[kind])
-            return
-
-        seen[kind] = row.dir_name
-        rows.append(vars(row))
-
-    if repeats:
-        extra = rows[repeat_row]
-        dump(extra)
-        repeats.append(extra)
-        repeats = pd.DataFrame.from_records(repeats)
-        repeat_max = repeats["pass_rate_2"].max()
-        repeat_min = repeats["pass_rate_2"].min()
-        repeat_avg = repeats["pass_rate_2"].mean()
-
-        repeat_lo = repeat_avg - repeat_min
-        repeat_hi = repeat_max - repeat_avg
-
-        dump(repeat_max)
-        dump(repeat_min)
-        dump(repeat_avg)
-
-        # use the average in the main bar
-        rows[repeat_row]["pass_rate_2"] = repeat_avg
-
-    df = pd.DataFrame.from_records(rows)
-    df.sort_values(by=["model", "edit_format"], inplace=True)
-
-    tries = [df.groupby(["model", "edit_format"])["pass_rate_2"].mean()]
-    if True:
-        tries += [df.groupby(["model", "edit_format"])["pass_rate_1"].mean()]
-
-    plt.rcParams["hatch.linewidth"] = 0.5
-    plt.rcParams["hatch.color"] = "#444444"
-
-    from matplotlib import rc
-
-    rc("font", **{"family": "sans-serif", "sans-serif": ["Helvetica"], "size": 10})
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.grid(axis="y", zorder=0, lw=0.2)
-
-    zorder = 1
-    for grouped in tries:
-        zorder += 1
-        df = grouped.unstack()
-        num_models, num_formats = df.shape
-
-        pos = np.array(range(num_models))
-        width = 0.8 / num_formats
-
-        formats = df.columns
-        models = df.index
-
-        for i, fmt in enumerate(formats):
-            if zorder > 1:
-                edge = dict(
-                    edgecolor="#ffffff",
-                    linewidth=1.5,
-                )
-            else:
-                edge = dict()
-            if zorder == 2:
-                edge["label"] = fmt
-
-            color = "#b3e6a8" if "diff" in fmt else "#b3d1e6"
-            hatch = "////" if "func" in fmt else ""
-            rects = ax.bar(
-                pos + i * width,
-                df[fmt],
-                width * 0.95,
-                color=color,
-                hatch=hatch,
-                zorder=zorder,
-                **edge,
-            )
-            if zorder == 2:
-                ax.bar_label(rects, padding=4, labels=[f"{v:.0f}%" for v in df[fmt]], size=6)
-
-    if len(repeats):
-        ax.errorbar(
-            1.4,
-            repeat_avg,
-            yerr=[[repeat_lo], [repeat_hi]],
-            fmt="none",
-            zorder=5,
-            capsize=2.5,
-            elinewidth=1,
-            markeredgewidth=1,
-        )
-
-    ax.set_xticks([p + 1.5 * width for p in pos])
-    ax.set_xticklabels(models)
-
-    top = 95
-    ax.annotate(
-        "First attempt,\nbased on\ninstructions",
-        xy=(2.9, 51),
-        xytext=(2.5, top),
-        horizontalalignment="center",
-        verticalalignment="top",
-        arrowprops={"arrowstyle": "->", "connectionstyle": "arc3,rad=0.3"},
-    )
-    ax.annotate(
-        "Second attempt,\nbased on\nunit test errors",
-        xy=(3.1, 68),
-        xytext=(4.25, top),
-        horizontalalignment="center",
-        verticalalignment="top",
-        arrowprops={"arrowstyle": "->", "connectionstyle": "arc3,rad=0.3"},
-    )
-
-    ax.set_ylabel("Percent of exercises completed successfully")
-    # ax.set_xlabel("Model")
-    ax.set_title("GPT Code Editing")
-    ax.legend(
-        title="Edit Format",
-        loc="upper left",
-        # bbox_to_anchor=(0.95, 0.95),
-    )
-    ax.set_ylim(top=100)
-
-    plt.tight_layout()
-    plt.savefig("tmp.svg")
-    imgcat(fig)
-
     # df.to_csv("tmp.benchmarks.csv")
 
 
@@ -263,7 +102,7 @@ def main(
     if repo.is_dirty():
         commit_hash += "-dirty"
 
-    if len(dirnames) > 1 and not (stats_only or diffs_only):
+    if len(dirnames) > 1 and not stats_only and not diffs_only:
         print("Only provide 1 dirname unless running with --stats or --diffs")
         return 1
 
@@ -293,8 +132,8 @@ def main(
 
     if clean and dirname.exists():
         print("Cleaning up and replacing", dirname)
-        dir_files = set(fn.name for fn in dirname.glob("*"))
-        original_files = set(fn.name for fn in ORIGINAL_DNAME.glob("*"))
+        dir_files = {fn.name for fn in dirname.glob("*")}
+        original_files = {fn.name for fn in ORIGINAL_DNAME.glob("*")}
         if dir_files != original_files:
             print("ERROR: will not delete dir that does not look like original tests", dirname)
             return
@@ -361,7 +200,7 @@ def main(
 def show_diffs(dirnames):
     dirnames = sorted(dirnames)
 
-    all_results = dict((dirname, load_results(dirname)) for dirname in dirnames)
+    all_results = {dirname: load_results(dirname) for dirname in dirnames}
     testcases = set()
     for results in all_results.values():
         testcases.update(result["testcase"] for result in results)
@@ -396,8 +235,10 @@ def show_diffs(dirnames):
 
 def load_results(dirname):
     dirname = Path(dirname)
-    all_results = [json.loads(fname.read_text()) for fname in dirname.glob("*/.aider.results.json")]
-    return all_results
+    return [
+        json.loads(fname.read_text())
+        for fname in dirname.glob("*/.aider.results.json")
+    ]
 
 
 def summarize_results(dirname):
@@ -455,10 +296,7 @@ def summarize_results(dirname):
 
     console.print(f"test-cases: {res.completed_tests}")
     for key, val in variants.items():
-        if len(val) > 1:
-            style = "red"
-        else:
-            style = None
+        style = "red" if len(val) > 1 else None
         val = ", ".join(map(str, val))
         setattr(res, key, val)
         console.print(f"{key}: {val}", style=style)
@@ -511,8 +349,7 @@ def run_test(
     results_fname = testdir / ".aider.results.json"
     if results_fname.exists():
         try:
-            res = json.loads(results_fname.read_text())
-            return res
+            return json.loads(results_fname.read_text())
         except JSONDecodeError:
             print(f"{results_fname} failed to parse, skipping")
             return
@@ -572,7 +409,7 @@ def run_test(
 
     dur = 0
     test_outcomes = []
-    for i in range(tries):
+    for _ in range(tries):
         start = time.time()
         if not no_aider:
             coder.run(with_message=instructions)
