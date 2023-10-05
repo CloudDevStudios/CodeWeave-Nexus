@@ -29,8 +29,7 @@ def create_progress_bar(percentage):
     total_blocks = 30
     filled_blocks = int(total_blocks * percentage // 100)
     empty_blocks = total_blocks - filled_blocks
-    bar = block * filled_blocks + empty * empty_blocks
-    return bar
+    return block * filled_blocks + empty * empty_blocks
 
 
 def assert_newlines(lines):
@@ -64,10 +63,7 @@ def diff_partial_update(lines_orig, lines_updated, final=False, fname=None):
     if last_non_deleted is None:
         return ""
 
-    if num_orig_lines:
-        pct = last_non_deleted * 100 / num_orig_lines
-    else:
-        pct = 50
+    pct = last_non_deleted * 100 / num_orig_lines if num_orig_lines else 50
     bar = create_progress_bar(pct)
     bar = f" {last_non_deleted:3d} / {num_orig_lines:3d} lines [{bar}] {pct:3.0f}%\n"
 
@@ -118,10 +114,6 @@ def find_last_non_deleted(lines_orig, lines_updated):
         elif code == "-":
             # line only in orig
             num_orig += 1
-        elif code == "+":
-            # line only in updated
-            pass
-
     return last_non_deleted_orig
 
 

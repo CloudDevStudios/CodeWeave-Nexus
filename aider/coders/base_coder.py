@@ -50,13 +50,7 @@ class Coder:
     last_keyboard_interrupt = None
 
     @classmethod
-    def create(
-        self,
-        main_model,
-        edit_format,
-        io,
-        **kwargs,
-    ):
+    def create(cls, main_model, edit_format, io, **kwargs):
         from . import EditBlockCoder, WholeFileCoder
 
         if not main_model:
@@ -242,10 +236,9 @@ class Coder:
                 yield fname, content
 
     def choose_fence(self):
-        all_content = ""
-        for _fname, content in self.get_abs_fnames_content():
-            all_content += content + "\n"
-
+        all_content = "".join(
+            content + "\n" for _fname, content in self.get_abs_fnames_content()
+        )
         good = False
         for fence_open, fence_close in self.fences:
             if fence_open in all_content or fence_close in all_content:
@@ -284,8 +277,7 @@ class Coder:
             return
 
         other_files = set(self.get_all_abs_files()) - set(self.abs_fnames)
-        repo_content = self.repo_map.get_repo_map(self.abs_fnames, other_files)
-        return repo_content
+        return self.repo_map.get_repo_map(self.abs_fnames, other_files)
 
     def get_files_messages(self):
         all_content = ""
@@ -297,8 +289,7 @@ class Coder:
 
         all_content += files_content
 
-        repo_content = self.get_repo_map()
-        if repo_content:
+        if repo_content := self.get_repo_map():
             if all_content:
                 all_content += "\n"
             all_content += repo_content
@@ -404,8 +395,7 @@ class Coder:
 
     def fmt_system_reminder(self):
         prompt = self.gpt_prompts.system_reminder
-        prompt = prompt.format(fence=self.fence)
-        return prompt
+        return prompt.format(fence=self.fence)
 
     def send_new_user_message(self, inp):
         self.choose_fence()
@@ -451,17 +441,19 @@ class Coder:
             self.io.tool_error(" - Use /clear to clear chat history.")
             return
 
-        if self.partial_response_function_call:
-            args = self.parse_partial_args()
-            if args:
-                content = args["explanation"]
-            else:
-                content = ""
-        elif self.partial_response_content:
-            content = self.partial_response_content
-        else:
+        if self.partial_response_function_call and (
+            args := self.parse_partial_args()
+        ):
+            content = args["explanation"]
+        elif (
+            self.partial_response_function_call
+            and not (args := self.parse_partial_args())
+            or not self.partial_response_function_call
+            and not self.partial_response_content
+        ):
             content = ""
-
+        else:
+            content = self.partial_response_content
         if interrupted:
             content += "\n^C KeyboardInterrupt"
 
@@ -487,8 +479,7 @@ class Coder:
 
             self.move_back_cur_messages(saved_message)
 
-        add_rel_files_message = self.check_for_file_mentions(content)
-        if add_rel_files_message:
+        if add_rel_files_message := self.check_for_file_mentions(content):
             return add_rel_files_message
 
     def update_cur_messages(self, edited):
@@ -504,14 +495,14 @@ class Coder:
             ]
 
     def check_for_file_mentions(self, content):
-        words = set(word for word in content.split())
+        words = set(content.split())
 
         # drop sentence punctuation from the end
-        words = set(word.rstrip(",.!;") for word in words)
+        words = {word.rstrip(",.!;") for word in words}
 
         # strip away all kinds of quotes
         quotes = "".join(['"', "'", "`"])
-        words = set(word.strip(quotes) for word in words)
+        words = {word.strip(quotes) for word in words}
 
         addable_rel_fnames = self.get_addable_relative_files()
 
@@ -567,9 +558,7 @@ class Coder:
         if self.partial_response_content:
             self.io.ai_output(self.partial_response_content)
         elif self.partial_response_function_call:
-            # TODO: push this into subclasses
-            args = self.parse_partial_args()
-            if args:
+            if args := self.parse_partial_args():
                 self.io.ai_output(json.dumps(args, indent=4))
 
         return interrupted
@@ -624,10 +613,7 @@ class Coder:
         self.io.tool_output(tokens)
 
     def show_send_output_stream(self, completion):
-        live = None
-        if self.pretty:
-            live = Live(vertical_overflow="scroll")
-
+        live = Live(vertical_overflow="scroll") if self.pretty else None
         try:
             if live:
                 live.start()
@@ -700,9 +686,7 @@ class Coder:
 
     def get_last_modified(self):
         files = [Path(fn) for fn in self.get_all_abs_files() if Path(fn).exists()]
-        if not files:
-            return 0
-        return max(path.stat().st_mtime for path in files)
+        return 0 if not files else max(path.stat().st_mtime for path in files)
 
     def get_addable_relative_files(self):
         return set(self.get_all_relative_files()) - set(self.get_inchat_relative_files())
@@ -724,11 +708,7 @@ class Coder:
 
     def allowed_to_edit(self, path):
         full_path = self.abs_root_path(path)
-        if self.repo:
-            need_to_add = not self.repo.path_in_repo(path)
-        else:
-            need_to_add = False
-
+        need_to_add = not self.repo.path_in_repo(path) if self.repo else False
         if full_path in self.abs_fnames:
             self.check_for_dirty_commit(path)
             return True
@@ -793,7 +773,7 @@ class Coder:
         edits = self.get_edits()
         edits = self.prepare_to_edit(edits)
         self.apply_edits(edits)
-        return set(edit[0] for edit in edits)
+        return {edit[0] for edit in edits}
 
     def apply_updates(self):
         max_apply_update_errors = 3
@@ -871,8 +851,9 @@ class Coder:
 
     def auto_commit(self, edited):
         context = self.get_context_from_history(self.cur_messages)
-        res = self.repo.commit(fnames=edited, context=context, prefix="aider: ")
-        if res:
+        if res := self.repo.commit(
+            fnames=edited, context=context, prefix="aider: "
+        ):
             commit_hash, commit_message = res
             self.last_aider_commit_hash = commit_hash
 

@@ -46,9 +46,6 @@ class WholeFileFunctionCoder(Coder):
     def __init__(self, *args, **kwargs):
         raise RuntimeError("Deprecated, needs to be refactored to support get_edits/apply_edits")
 
-        self.gpt_prompts = WholeFileFunctionPrompts()
-        super().__init__(*args, **kwargs)
-
     def update_cur_messages(self, edited):
         if edited:
             self.cur_messages += [
@@ -93,11 +90,7 @@ class WholeFileFunctionCoder(Coder):
         full_path = self.abs_root_path(fname)
 
         content = self.io.read_text(full_path)
-        if content is None:
-            orig_lines = []
-        else:
-            orig_lines = content.splitlines()
-
+        orig_lines = [] if content is None else content.splitlines()
         show_diff = diffs.diff_partial_update(
             orig_lines,
             lines,

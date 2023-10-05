@@ -135,11 +135,9 @@ class GitRepo:
         if not fnames:
             fnames = []
 
-        diffs = ""
-        for fname in fnames:
-            if not self.path_in_repo(fname):
-                diffs += f"Added {fname}\n"
-
+        diffs = "".join(
+            f"Added {fname}\n" for fname in fnames if not self.path_in_repo(fname)
+        )
         if current_branch_has_commits:
             args = ["HEAD", "--"] + list(fnames)
             diffs += self.repo.git.diff(*args)
@@ -159,9 +157,7 @@ class GitRepo:
             args += ["--color"]
 
         args += [from_commit, to_commit]
-        diffs = self.repo.git.diff(*args)
-
-        return diffs
+        return self.repo.git.diff(*args)
 
     def get_tracked_files(self):
         if not self.repo:
@@ -174,23 +170,23 @@ class GitRepo:
 
         files = []
         if commit:
-            for blob in commit.tree.traverse():
-                if blob.type == "blob":  # blob is a file
-                    files.append(blob.path)
-
+            files.extend(
+                blob.path for blob in commit.tree.traverse() if blob.type == "blob"
+            )
         # Add staged files
         index = self.repo.index
         staged_files = [path for path, _ in index.entries.keys()]
 
         files.extend(staged_files)
 
-        # convert to appropriate os.sep, since git always normalizes to /
-        res = set(
-            str(Path(PurePosixPath((Path(self.root) / path).relative_to(self.root))))
+        return {
+            str(
+                Path(
+                    PurePosixPath((Path(self.root) / path).relative_to(self.root))
+                )
+            )
             for path in files
-        )
-
-        return res
+        }
 
     def path_in_repo(self, path):
         if not self.repo:

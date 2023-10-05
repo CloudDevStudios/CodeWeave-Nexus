@@ -59,38 +59,13 @@ class EditBlockFunctionCoder(Coder):
 
     def __init__(self, code_format, *args, **kwargs):
         raise RuntimeError("Deprecated, needs to be refactored to support get_edits/apply_edits")
-        self.code_format = code_format
-
-        if code_format == "string":
-            original_lines = dict(
-                type="string",
-                description=(
-                    "A unique stretch of lines from the original file, including all"
-                    " whitespace and newlines, without skipping any lines"
-                ),
-            )
-            updated_lines = dict(
-                type="string",
-                description="New content to replace the `original_lines` with",
-            )
-
-            self.functions[0]["parameters"]["properties"]["edits"]["items"]["properties"][
-                "original_lines"
-            ] = original_lines
-            self.functions[0]["parameters"]["properties"]["edits"]["items"]["properties"][
-                "updated_lines"
-            ] = updated_lines
-
-        self.gpt_prompts = EditBlockFunctionPrompts()
-        super().__init__(*args, **kwargs)
 
     def render_incremental_response(self, final=False):
         if self.partial_response_content:
             return self.partial_response_content
 
         args = self.parse_partial_args()
-        res = json.dumps(args, indent=4)
-        return res
+        return json.dumps(args, indent=4)
 
     def _update_files(self):
         name = self.partial_response_function_call.get("name")
@@ -125,8 +100,7 @@ class EditBlockFunctionCoder(Coder):
             if not full_path:
                 continue
             content = self.io.read_text(full_path)
-            content = do_replace(full_path, content, original, updated)
-            if content:
+            if content := do_replace(full_path, content, original, updated):
                 self.io.write_text(full_path, content)
                 edited.add(path)
                 continue

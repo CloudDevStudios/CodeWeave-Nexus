@@ -21,9 +21,8 @@ def dump(*vals):
     vars = ")".join(vars.split(")")[:-1])
 
     vals = [cvt(v) for v in vals]
-    has_newline = sum(1 for v in vals if "\n" in v)
-    if has_newline:
-        print("%s:" % vars)
+    if has_newline := sum(1 for v in vals if "\n" in v):
+        print(f"{vars}:")
         print(", ".join(vals))
     else:
-        print("%s:" % vars, ", ".join(vals))
+        print(f"{vars}:", ", ".join(vals))

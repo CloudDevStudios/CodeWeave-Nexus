@@ -16,17 +16,13 @@ class EditBlockCoder(Coder):
     def get_edits(self):
         content = self.partial_response_content
 
-        # might raise ValueError for malformed ORIG/UPD blocks
-        edits = list(find_original_update_blocks(content))
-
-        return edits
+        return list(find_original_update_blocks(content))
 
     def apply_edits(self, edits):
         for path, original, updated in edits:
             full_path = self.abs_root_path(path)
             content = self.io.read_text(full_path)
-            content = do_replace(full_path, content, original, updated)
-            if content:
+            if content := do_replace(full_path, content, original, updated):
                 self.io.write_text(full_path, content)
                 continue
             raise ValueError(f"""InvalidEditBlock: edit failed!
@@ -50,14 +46,12 @@ def prep(content):
 
 
 def perfect_or_whitespace(whole_lines, part_lines, replace_lines):
-    # Try for a perfect match
-    res = perfect_replace(whole_lines, part_lines, replace_lines)
-    if res:
+    if res := perfect_replace(whole_lines, part_lines, replace_lines):
         return res
 
-    # Try being flexible about leading whitespace
-    res = replace_part_with_missing_leading_whitespace(whole_lines, part_lines, replace_lines)
-    if res:
+    if res := replace_part_with_missing_leading_whitespace(
+        whole_lines, part_lines, replace_lines
+    ):
         return res
 
 
@@ -79,30 +73,25 @@ def replace_most_similar_chunk(whole, part, replace):
     part, part_lines = prep(part)
     replace, replace_lines = prep(replace)
 
-    res = perfect_or_whitespace(whole_lines, part_lines, replace_lines)
-    if res:
+    if res := perfect_or_whitespace(whole_lines, part_lines, replace_lines):
         return res
 
     # drop leading empty line, GPT sometimes adds them spuriously (issue #25)
     if len(part_lines) > 2 and not part_lines[0].strip():
         skip_blank_line_part_lines = part_lines[1:]
-        res = perfect_or_whitespace(whole_lines, skip_blank_line_part_lines, replace_lines)
-        if res:
+        if res := perfect_or_whitespace(
+            whole_lines, skip_blank_line_part_lines, replace_lines
+        ):
             return res
 
     # Try to handle when it elides code with ...
     try:
-        res = try_dotdotdots(whole, part, replace)
-        if res:
+        if res := try_dotdotdots(whole, part, replace):
             return res
     except ValueError:
         pass
 
     return
-    # Try fuzzy matching
-    res = replace_closest_edit_distance(whole_lines, part, part_lines, replace_lines)
-    if res:
-        return res
 
 
 def try_dotdotdots(whole, part, replace):
@@ -139,10 +128,10 @@ def try_dotdotdots(whole, part, replace):
 
     pairs = zip(part_pieces, replace_pieces)
     for part, replace in pairs:
-        if not part and not replace:
-            continue
+        if not part:
+            if not replace:
+                continue
 
-        if not part and replace:
             if not whole.endswith("\n"):
                 whole += "\n"
             whole += replace
@@ -195,15 +184,17 @@ def match_but_for_leading_whitespace(whole_lines, part_lines):
     num = len(whole_lines)
 
     # does the non-whitespace all agree?
-    if not all(whole_lines[i].lstrip() == part_lines[i].lstrip() for i in range(num)):
+    if any(
+        whole_lines[i].lstrip() != part_lines[i].lstrip() for i in range(num)
+    ):
         return
 
     # are they all offset the same?
-    add = set(
+    add = {
         whole_lines[i][: len(whole_lines[i]) - len(part_lines[i])]
         for i in range(num)
         if whole_lines[i].strip()
-    )
+    }
 
     if len(add) != 1:
         return
@@ -292,13 +283,11 @@ def do_replace(fname, content, before_text, after_text, fence=None):
     if content is None:
         return
 
-    if not before_text.strip():
-        # append to existing file, or start a new file
-        new_content = content + after_text
-    else:
-        new_content = replace_most_similar_chunk(content, before_text, after_text)
-
-    return new_content
+    return (
+        content + after_text
+        if not before_text.strip()
+        else replace_most_similar_chunk(content, before_text, after_text)
+    )
 
 
 HEAD = "<<<<<<< HEAD"
@@ -307,7 +296,9 @@ UPDATED = ">>>>>>> updated"
 
 separators = "|".join([HEAD, DIVIDER, UPDATED])
 
-split_re = re.compile(r"^((?:" + separators + r")[ ]*\n)", re.MULTILINE | re.DOTALL)
+split_re = re.compile(
+    f"^((?:{separators}" + r")[ ]*\n)", re.MULTILINE | re.DOTALL
+)
 
 
 def find_original_update_blocks(content):

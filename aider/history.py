@@ -42,12 +42,11 @@ class ChatSummary:
         # Iterate over the messages in reverse order
         for i in range(len(sized) - 1, -1, -1):
             tokens, _msg = sized[i]
-            if tail_tokens + tokens < half_max_tokens:
-                tail_tokens += tokens
-                split_index = i
-            else:
+            if tail_tokens + tokens >= half_max_tokens:
                 break
 
+            tail_tokens += tokens
+            split_index = i
         # Ensure the head ends with an assistant message
         while messages[split_index - 1]["role"] != "assistant" and split_index > 1:
             split_index -= 1

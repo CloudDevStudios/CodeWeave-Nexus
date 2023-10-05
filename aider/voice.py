@@ -38,11 +38,7 @@ class Voice:
         self.min_rms = min(self.min_rms, rms)
 
         rng = self.max_rms - self.min_rms
-        if rng > 0.001:
-            self.pct = (rms - self.min_rms) / rng
-        else:
-            self.pct = 0.5
-
+        self.pct = (rms - self.min_rms) / rng if rng > 0.001 else 0.5
         self.q.put(indata.copy())
 
     def get_prompt(self):
@@ -83,12 +79,11 @@ class Voice:
         with open(filename, "rb") as fh:
             transcript = openai.Audio.transcribe("whisper-1", fh, prompt=history, language=language)
 
-        text = transcript["text"]
-        return text
+        return transcript["text"]
 
 
 if __name__ == "__main__":
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if api_key := os.getenv("OPENAI_API_KEY"):
+        print(Voice().record_and_transcribe())
+    else:
         raise ValueError("Please set the OPENAI_API_KEY environment variable.")
-    print(Voice().record_and_transcribe())
